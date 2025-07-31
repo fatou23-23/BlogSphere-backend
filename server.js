@@ -3,16 +3,26 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 dotenv.config();
+const articleRoutes = require('./routes/articleRoutes');
+// Import des routes
+const authRoutes = require('./routes/authRoutes')
+const userRoutes = require('./routes/userRoutes');
+
+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Import routes
-const authRoutes = require('./routes/authRoutes');
-app.use('/api/auth', authRoutes);
 
-// Connect to DB + Start server
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes); // 👈 donc /api/user/profile
+app.use('/api/articles', articleRoutes);
+// console.log('✅ articleRoutes est :', typeof articleRoutes);
+app.get('/', (req, res) => {
+  res.send("Bienvenue sur mon backend");
+});
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("✅ Connexion MongoDB réussie 🚀");

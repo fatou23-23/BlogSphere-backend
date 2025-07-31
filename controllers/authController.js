@@ -1,7 +1,11 @@
+require('dotenv').config(); // charge les variables d'environnement
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
 const JWT_SECRET = process.env.JWT_SECRET;
+
+console.log("🔐 Clé utilisée pour SIGNER :", process.env.JWT_SECRET);
 
 // Inscription
 exports.register = async (req, res) => {
@@ -29,7 +33,7 @@ exports.login = async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ msg: "Mot de passe incorrect" });
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "3d" });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "3d" });
     res.json({
       token,
       user: {
