@@ -1,35 +1,66 @@
-// routes/articleRoutes.js
-const express = require('express');
-const router = express.Router();
-const verifyToken = require('../middlewares/verifyToken');
-const Article = require('../models/Article');
+const mongoose = require('mongoose');
 
-
-// ✅ POST /api/articles/create
-router.post('/create', verifyToken, async (req, res) => {
-  console.log("📥 Route /api/articles/create appelée");
-  const { title, content } = req.body;
-
-  if (!title || !content) {
-    return res.status(400).json({ msg: "Titre et contenu requis ❌" });
+const articleSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 5,
+      maxlength: 150
+    },
+    content: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 20
+    },
+    image: {
+      type: String,
+      default: 'https://source.unsplash.com/random/400x200?sig=1',
+      trim: true
+    },
+    author: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+    dislikes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+    views: {
+      type: Number,
+      default: 0
+    },
+    comments: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Comment'
+      }
+    ],
+    category: {
+      type: String,
+      enum: ['lifestyle', 'sport', 'tech', 'santé'],
+      default: 'lifestyle'
+    },
+    isDraft: {
+      type: Boolean,
+      default: false
+    }
+  },
+  {
+    timestamps: true
   }
+);
 
-  try {
-    const article = new Article({
-      title,
-      content,
-      author: req.userId
-    });
-
-    const savedArticle = await article.save();
-
-    res.status(201).json({
-      msg: "Article créé avec succès ✅",
-      article: savedArticle
-    });
-  } catch (error) {
-    console.error("Erreur lors de la création de l'article :", error.message);
-    res.status(500).json({ msg: "Erreur serveur", error: error.message });
-  }
-});
-module.exports = router;
+// ✅ Solution contre OverwriteModelError
+module.exports = mongoose.models.Article || mongoose.model('Article', articleSchema);

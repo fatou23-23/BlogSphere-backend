@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const verifyToken = require('../middlewares/verifyToken');
 
 
 // ✅ Route : POST /api/auth/register
@@ -28,6 +29,17 @@ router.post('/register', async (req, res) => {
 // ✅ Route POST /api/auth/logout (fausse déconnexion, juste informative)
 router.post('/logout', (req, res) => {
   res.status(200).json({ msg: "Déconnexion réussie ✅ " });
+});
+// ✅ Route : récupérer le profil via /api/auth/profile
+router.get('/profile', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('-password');
+    if (!user) return res.status(404).json({ msg: "Utilisateur non trouvé ❌" });
+
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ msg: "Erreur serveur", error: err.message });
+  }
 });
 
 // ✅ Route : POST /api/auth/login
@@ -64,5 +76,28 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ msg: "Erreur serveur lors de la connexion" });
   }
 });
+// 🔄 Route : modifier le profil de l'utilisateur connecté
+router.put('/profile', verifyToken, async (req, res) => {
+  try {
+    const { username, email, bio, avatar } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+  req.userId,
+  { username, email, bio, avatar },
+  { new: true, runValidators: true }
+).select('-password');
+    if (!updatedUser) {
+      return res.status(404).json({ msg: "Utilisateur non trouvé ❌" });
+    }
+
+    res.status(200).json({
+      msg: "Profil mis à jour ✅",
+      user: updatedUser
+    });
+  } catch (err) {
+    res.status(500).json({ msg: "Erreur serveur", error: err.message });
+  }
+});
+
 
 module.exports = router;
