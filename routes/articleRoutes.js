@@ -9,11 +9,13 @@ router.post('/create', verifyToken, async (req, res) => {
   try {
     const { title, content, category, isDraft, image } = req.body;
 
+    const finalImage = image?.trim() || `https://source.unsplash.com/featured/?${category}`;
+
     const article = new Article({
       title,
       content,
       category,
-      image, // ✅ ajout du champ image
+      image: finalImage,
       isDraft: isDraft || false,
       author: req.userId
     });
@@ -89,9 +91,11 @@ router.put('/:id', verifyToken, async (req, res) => {
   try {
     const { title, content, category, isDraft, image } = req.body;
 
+    const finalImage = image?.trim() || `https://source.unsplash.com/featured/?${category}`;
+
     const updatedArticle = await Article.findOneAndUpdate(
       { _id: req.params.id, author: req.userId },
-      { title, content, category, isDraft, image }, // ✅ inclure image
+      { title, content, category, isDraft, image: finalImage },
       { new: true, runValidators: true }
     );
 
