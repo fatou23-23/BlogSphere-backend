@@ -1,31 +1,43 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middlewares/verifyToken');
+const upload = require('../middlewares/upload');
 const Article = require('../models/Article');
 const Comment = require('../models/Comment');
 
 // ✅ Créer un article ou un brouillon
-router.post('/create', verifyToken, async (req, res) => {
+router.post('/create', verifyToken, upload.single("image"), async (req, res) => {
   try {
-    const { title, content, category, isDraft, image } = req.body;
+    console.log("🔧 Champs reçus :", req.body);
+    console.log("📷 Fichier reçu :", req.file);
 
-    const finalImage = image?.trim() || `https://source.unsplash.com/featured/?${category}`;
+    const { title, content, category, isDraft } = req.body;
+
+    let finalImage = "";
+
+    if (req.file) {
+      finalImage = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    } else {
+      finalImage = `https://source.unsplash.com/featured/?${category}`;
+    }
 
     const article = new Article({
       title,
       content,
       category,
       image: finalImage,
-      isDraft: isDraft || false,
+      isDraft: isDraft === 'true',
       author: req.userId
     });
 
     await article.save();
     res.status(201).json({ msg: 'Article créé ✅', article });
   } catch (err) {
+    console.error("❌ Erreur serveur :", err);
     res.status(500).json({ msg: 'Erreur serveur', error: err.message });
   }
 });
+
 
 // ✅ Récupérer tous les articles (avec recherche, filtre, pagination)
 router.get('/', async (req, res) => {

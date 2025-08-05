@@ -12,8 +12,8 @@ const articleSchema = new mongoose.Schema(
     content: {
       type: String,
       required: true,
-      trim: true,
-      minlength: 20
+      trim: true
+     
     },
     image: {
       type: String,
