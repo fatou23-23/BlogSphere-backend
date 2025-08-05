@@ -3,185 +3,136 @@ const router = express.Router();
 const verifyToken = require('../middlewares/verifyToken');
 const upload = require('../middlewares/upload');
 const Article = require('../models/Article');
-const Comment = require('../models/Comment');
 
-// ✅ Créer un article ou un brouillon
+// --- Créer un article
 router.post('/create', verifyToken, upload.single("image"), async (req, res) => {
   try {
-    console.log("🔧 Champs reçus :", req.body);
-    console.log("📷 Fichier reçu :", req.file);
+    const { title, content, category = 'lifestyle', isDraft = false } = req.body;
+    const author = req.user.id;
+    const image = req.file?.path || req.body.image || 'https://source.unsplash.com/random/400x200?sig=1';
 
-    const { title, content, category, isDraft } = req.body;
-
-    let finalImage = "";
-
-    if (req.file) {
-      finalImage = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-    } else {
-      finalImage = `https://source.unsplash.com/featured/?${category}`;
+    if (!title?.trim() || !content?.trim()) {
+      return res.status(400).json({ msg: '❌ Le titre et le contenu sont obligatoires.' });
     }
 
-    const article = new Article({
-      title,
-      content,
-      category,
-      image: finalImage,
-      isDraft: isDraft === 'true',
-      author: req.userId
-    });
+    const newArticle = await Article.create({ title, content, image, category, author, isDraft });
+    res.status(201).json({ msg: '✅ Article créé', article: newArticle });
 
-    await article.save();
-    res.status(201).json({ msg: 'Article créé ✅', article });
-  } catch (err) {
-    console.error("❌ Erreur serveur :", err);
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
+  } catch (error) {
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
   }
 });
 
-
-// ✅ Récupérer tous les articles (avec recherche, filtre, pagination)
+// --- Lire tous les articles
 router.get('/', async (req, res) => {
   try {
-    const { category, q, page = 1, limit = 5, sort = 'createdAt' } = req.query;
-    const filter = { isDraft: false };
-    if (category) filter.category = category;
-    if (q) {
-      filter.$or = [
-        { title: { $regex: q, $options: 'i' } },
-        { content: { $regex: q, $options: 'i' } }
-      ];
-    }
+    const articles = await Article.find()
+      .populate('author', 'username email')
+      .sort({ createdAt: -1 });
 
-    const skip = (page - 1) * limit;
-    const articles = await Article.find(filter)
+    res.json(articles);
+  } catch (err) {
+    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+// --- Lire un article par ID (avec incrémentation de vues)
+router.get('/:id', async (req, res) => {
+  try {
+    const article = await Article.findById(req.params.id)
       .populate('author', 'username email')
       .populate({
         path: 'comments',
         populate: { path: 'author', select: 'username' }
-      })
-      .sort({ [sort]: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+      });
 
-    const total = await Article.countDocuments(filter);
+    if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
 
-    res.json({
-      page: parseInt(page),
-      totalPages: Math.ceil(total / limit),
-      articles
-    });
-  } catch (err) {
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
-  }
-});
-
-// ✅ Lire un article + augmenter les vues
-router.get('/:id', async (req, res) => {
-  try {
-    const article = await Article.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { views: 1 } },
-      { new: true }
-    )
-      .populate('author', 'username email bio')
-      .populate({
-        path: 'comments',
-        populate: { path: 'author', select: 'username' }
-      })
-      .populate('likes');
-
-    if (!article) return res.status(404).json({ msg: 'Article non trouvé ❌' });
+    article.views += 1;
+    await article.save();
 
     res.json(article);
   } catch (err) {
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
+    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
   }
 });
 
-// ✅ Modifier un article
-router.put('/:id', verifyToken, async (req, res) => {
+// --- Modifier un article
+router.put('/update/:id', verifyToken, upload.single("image"), async (req, res) => {
   try {
-    const { title, content, category, isDraft, image } = req.body;
+    const { title, content, category, isDraft } = req.body;
+    const image = req.file?.path || req.body.image;
 
-    const finalImage = image?.trim() || `https://source.unsplash.com/featured/?${category}`;
-
-    const updatedArticle = await Article.findOneAndUpdate(
-      { _id: req.params.id, author: req.userId },
-      { title, content, category, isDraft, image: finalImage },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedArticle)
-      return res.status(403).json({ msg: 'Modification refusée ❌' });
-
-    res.json({ msg: 'Article modifié ✅', article: updatedArticle });
-  } catch (err) {
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
-  }
-});
-
-// ✅ Supprimer un article
-router.delete('/:id', verifyToken, async (req, res) => {
-  try {
-    const deleted = await Article.findOneAndDelete({
-      _id: req.params.id,
-      author: req.userId
-    });
-
-    if (!deleted)
-      return res.status(403).json({ msg: 'Suppression refusée ❌' });
-
-    res.json({ msg: 'Article supprimé ✅', article: deleted });
-  } catch (err) {
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
-  }
-});
-
-// ✅ Like / Unlike
-router.put('/:id/like', verifyToken, async (req, res) => {
-  try {
     const article = await Article.findById(req.params.id);
-    if (!article) return res.status(404).json({ msg: 'Article non trouvé ❌' });
+    if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
 
-    const liked = article.likes.includes(req.userId);
-
-    if (liked) {
-      article.likes.pull(req.userId);
-    } else {
-      article.likes.push(req.userId);
+    if (article.author.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '❌ Action non autorisée : vous n\'êtes pas l\'auteur' });
     }
 
+    if (title) article.title = title;
+    if (content) article.content = content;
+    if (category) article.category = category;
+    if (typeof isDraft !== 'undefined') article.isDraft = isDraft;
+    if (image) article.image = image;
+
     await article.save();
-    res.json({
-      msg: liked ? 'Like retiré ❌' : 'Article liké ❤️',
-      totalLikes: article.likes.length
-    });
+
+    res.json({ msg: '✅ Article modifié', article });
   } catch (err) {
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
+    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
   }
 });
 
-// ✅ Dislike / Undislike
-router.put('/:id/dislike', verifyToken, async (req, res) => {
+// --- Supprimer un article
+router.delete('/delete/:id', verifyToken, async (req, res) => {
   try {
     const article = await Article.findById(req.params.id);
-    if (!article) return res.status(404).json({ msg: 'Article non trouvé ❌' });
+    if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
 
-    const disliked = article.dislikes.includes(req.userId);
+    console.log("🔐 Utilisateur connecté :", req.user.id);
+    console.log("✏️ Auteur de l'article :", article.author.toString());
 
-    if (disliked) {
-      article.dislikes.pull(req.userId);
-    } else {
-      article.dislikes.push(req.userId);
+    if (article.author.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '❌ Action non autorisée : vous n\'êtes pas l\'auteur' });
     }
 
-    await article.save();
-    res.json({
-      msg: disliked ? 'Dislike retiré ❌' : 'Article disliké 👎',
-      totalDislikes: article.dislikes.length
-    });
+    await article.deleteOne();
+    res.json({ msg: '✅ Article supprimé' });
   } catch (err) {
-    res.status(500).json({ msg: 'Erreur serveur', error: err.message });
+    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+// --- Rechercher par mot clé ou catégorie
+router.get('/search', async (req, res) => {
+  try {
+    const { q, category } = req.query;
+    const filter = {};
+
+    if (q) filter.title = { $regex: q, $options: 'i' };
+    if (category) filter.category = category;
+
+    const articles = await Article.find(filter)
+      .populate('author', 'username email')
+      .sort({ createdAt: -1 });
+
+    res.json(articles);
+  } catch (err) {
+    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  }
+});
+
+// --- (Optionnel) Voir seulement mes articles
+router.get('/mine', verifyToken, async (req, res) => {
+  try {
+    const myArticles = await Article.find({ author: req.user.id })
+      .populate('author', 'username')
+      .sort({ createdAt: -1 });
+
+    res.json(myArticles);
+  } catch (err) {
+    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
   }
 });
 
