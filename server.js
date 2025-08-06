@@ -2,31 +2,38 @@ const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
-dotenv.config();
-const articleRoutes = require('./routes/articleRoutes');
+const path = require('path'); // ✅ pour servir les fichiers statiques
 
-const authRoutes = require('./routes/authRoutes')
+dotenv.config();
+
+const articleRoutes = require('./routes/articleRoutes');
+const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const commentRoute = require('./routes/commentRoute');
 
-
-
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// ✅ Servir les images statiques du dossier 'uploads'
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes); // 👈 donc /api/user/profile
 app.use('/api/articles', articleRoutes);
 app.use('/api/comments', commentRoute);
-// console.log('✅ articleRoutes est :', typeof articleRoutes);
+
+// Route test
 app.get('/', (req, res) => {
   res.send("Bienvenue sur mon backend");
 });
 
+// Connexion MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("✅ Connexion MongoDB réussie 🚀");

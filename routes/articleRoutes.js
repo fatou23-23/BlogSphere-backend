@@ -1,46 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const verifyToken = require('../middlewares/verifyToken');
 const upload = require('../middlewares/upload');
 const Article = require('../models/Article');
 
-// --- Créer un article
-router.post('/create', upload.single("image"), verifyToken, async (req, res) => {
+// 📌 Créer un article
+router.post('/create', verifyToken, upload.single('image'), async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ msg: "❌ Utilisateur non authentifié" });
-    }
-
     const { title, content, category = 'lifestyle', isDraft = false } = req.body;
-    const author = req.user.id;
-    const image = req.file?.path || req.body.image || 'https://source.unsplash.com/random/400x200?sig=1';
+
+    if (!req.user?.id) {
+      return res.status(401).json({ msg: '❌ Utilisateur non authentifié' });
+    }
 
     if (!title?.trim() || !content?.trim()) {
       return res.status(400).json({ msg: '❌ Le titre et le contenu sont obligatoires.' });
     }
 
-    const newArticle = await Article.create({ title, content, image, category, author, isDraft });
-    res.status(201).json({ msg: '✅ Article créé', article: newArticle });
+    const imagePath = req.file
+      ? `/uploads/${req.file.filename}`
+      : req.body.image || 'https://source.unsplash.com/random/400x200?sig=1';
 
+    const newArticle = new Article({
+      title,
+      content,
+      category,
+      isDraft,
+      author: req.user.id,
+      image: imagePath,
+    });
+
+    await newArticle.save();
+    res.status(201).json({ msg: '✅ Article créé', article: newArticle });
   } catch (error) {
-    console.error("Erreur création article :", error);
+    console.error('❌ Erreur création article :', error);
     res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
   }
 });
 
-// --- Modifier un article (seulement par l’auteur)
-router.put('/update/:id', upload.single("image"), verifyToken, async (req, res) => {
+// 📌 Modifier un article
+router.put('/update/:id', verifyToken, upload.single('image'), async (req, res) => {
   try {
     const article = await Article.findById(req.params.id);
     if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
 
     if (article.author.toString() !== req.user.id) {
-      return res.status(403).json({ msg: '❌ Action non autorisée : vous n\'êtes pas l\'auteur' });
+      return res.status(403).json({ msg: '❌ Action non autorisée' });
     }
 
     const { title, content, category, isDraft } = req.body;
-    const image = req.file?.path || req.body.image;
+    const image = req.file
+      ? `/uploads/${req.file.filename}`
+      : req.body.image;
 
     if (title) article.title = title;
     if (content) article.content = content;
@@ -50,31 +61,31 @@ router.put('/update/:id', upload.single("image"), verifyToken, async (req, res) 
 
     await article.save();
     res.json({ msg: '✅ Article modifié', article });
-  } catch (err) {
-    console.error("Erreur modification article :", err);
-    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  } catch (error) {
+    console.error('❌ Erreur modification article :', error);
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
   }
 });
 
-// --- Supprimer un article (seulement par l’auteur)
+// 📌 Supprimer un article
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const article = await Article.findById(req.params.id);
     if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
 
     if (article.author.toString() !== req.user.id) {
-      return res.status(403).json({ msg: '❌ Action non autorisée : vous n\'êtes pas l\'auteur' });
+      return res.status(403).json({ msg: '❌ Action non autorisée' });
     }
 
     await article.deleteOne();
     res.json({ msg: '✅ Article supprimé' });
-  } catch (err) {
-    console.error("Erreur suppression article :", err);
-    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  } catch (error) {
+    console.error('❌ Erreur suppression article :', error);
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
   }
 });
 
-// --- Lire tous les articles
+// 📌 Lire tous les articles
 router.get('/', async (req, res) => {
   try {
     const articles = await Article.find()
@@ -82,20 +93,20 @@ router.get('/', async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json(articles);
-  } catch (err) {
-    console.error("Erreur lecture articles :", err);
-    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  } catch (error) {
+    console.error('❌ Erreur lecture articles :', error);
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
   }
 });
 
-// --- Lire un article par ID
+// 📌 Lire un article par ID (et incrémenter les vues)
 router.get('/:id', async (req, res) => {
   try {
     const article = await Article.findById(req.params.id)
       .populate('author', 'username email')
       .populate({
         path: 'comments',
-        populate: { path: 'author', select: 'username' }
+        populate: { path: 'author', select: 'username' },
       });
 
     if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
@@ -104,9 +115,55 @@ router.get('/:id', async (req, res) => {
     await article.save();
 
     res.json(article);
-  } catch (err) {
-    console.error("Erreur lecture article :", err);
-    res.status(500).json({ msg: '❌ Erreur serveur', error: err.message });
+  } catch (error) {
+    console.error('❌ Erreur lecture article :', error);
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
+  }
+});
+
+// ❤️ Like un article
+router.post('/:id/like', verifyToken, async (req, res) => {
+  try {
+    const article = await Article.findById(req.params.id);
+    if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
+
+    const userId = req.user.id;
+
+    article.dislikes = article.dislikes.filter(id => id.toString() !== userId);
+
+    if (article.likes.includes(userId)) {
+      article.likes = article.likes.filter(id => id.toString() !== userId);
+    } else {
+      article.likes.push(userId);
+    }
+
+    await article.save();
+    res.json({ msg: '👍 Like mis à jour', likes: article.likes.length, dislikes: article.dislikes.length });
+  } catch (error) {
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
+  }
+});
+
+// 👎 Dislike un article
+router.post('/:id/dislike', verifyToken, async (req, res) => {
+  try {
+    const article = await Article.findById(req.params.id);
+    if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
+
+    const userId = req.user.id;
+
+    article.likes = article.likes.filter(id => id.toString() !== userId);
+
+    if (article.dislikes.includes(userId)) {
+      article.dislikes = article.dislikes.filter(id => id.toString() !== userId);
+    } else {
+      article.dislikes.push(userId);
+    }
+
+    await article.save();
+    res.json({ msg: '👎 Dislike mis à jour', likes: article.likes.length, dislikes: article.dislikes.length });
+  } catch (error) {
+    res.status(500).json({ msg: '❌ Erreur serveur', error: error.message });
   }
 });
 
