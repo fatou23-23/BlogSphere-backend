@@ -7,7 +7,8 @@ const Article = require('../models/Article');
 // ✅ GET /api/user/profile
 router.get('/profile', verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
+    // req.user.id selon middleware verifyToken
+    const user = await User.findById(req.user.id).select('-password');
     if (!user) {
       return res.status(404).json({ msg: "Utilisateur non trouvé ❌" });
     }
@@ -24,7 +25,7 @@ router.post('/articles/create', verifyToken, async (req, res) => {
     const article = new Article({
       title,
       content,
-      author: req.userId
+      author: req.user.id
     });
 
     await article.save();
@@ -38,7 +39,7 @@ router.post('/articles/create', verifyToken, async (req, res) => {
 // ✅ GET /api/user/articles
 router.get('/articles', verifyToken, async (req, res) => {
   try {
-    const articles = await Article.find({ author: req.userId })
+    const articles = await Article.find({ author: req.user.id })
       .populate('author', 'username email')
       .sort({ createdAt: -1 });
 
@@ -58,7 +59,7 @@ router.put('/articles/:id', verifyToken, async (req, res) => {
     const { title, content } = req.body;
 
     const article = await Article.findOneAndUpdate(
-      { _id: req.params.id, author: req.userId },
+      { _id: req.params.id, author: req.user.id },
       { title, content },
       { new: true, runValidators: true }
     );
@@ -78,7 +79,7 @@ router.delete('/articles/:id', verifyToken, async (req, res) => {
   try {
     const deleted = await Article.findOneAndDelete({
       _id: req.params.id,
-      author: req.userId
+      author: req.user.id
     });
 
     if (!deleted) {
@@ -97,7 +98,7 @@ router.put('/update', verifyToken, async (req, res) => {
 
   try {
     const user = await User.findByIdAndUpdate(
-      req.userId,
+      req.user.id,
       { bio, avatar },
       { new: true, runValidators: true }
     ).select('-password');
