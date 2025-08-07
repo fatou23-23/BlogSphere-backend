@@ -1,3 +1,4 @@
+// routes/article.js
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middlewares/verifyToken');
@@ -85,10 +86,15 @@ router.delete('/:id', verifyToken, async (req, res) => {
   }
 });
 
-// 📌 Lire tous les articles
+// 📌 Lire tous les articles (avec filtre catégorie)
 router.get('/', async (req, res) => {
   try {
-    const articles = await Article.find()
+    const filter = {};
+    if (req.query.category) {
+      filter.category = req.query.category;
+    }
+
+    const articles = await Article.find(filter)
       .populate('author', 'username email')
       .sort({ createdAt: -1 });
 
@@ -122,7 +128,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ❤️ Like un article
-router.post('/:id/like', verifyToken, async (req, res) => {
+router.put('/:id/like', verifyToken, async (req, res) => {
   try {
     const article = await Article.findById(req.params.id);
     if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
@@ -145,7 +151,7 @@ router.post('/:id/like', verifyToken, async (req, res) => {
 });
 
 // 👎 Dislike un article
-router.post('/:id/dislike', verifyToken, async (req, res) => {
+router.put('/:id/dislike', verifyToken, async (req, res) => {
   try {
     const article = await Article.findById(req.params.id);
     if (!article) return res.status(404).json({ msg: '❌ Article non trouvé' });
